@@ -19,9 +19,10 @@ from core.utils.augmentor import FlowAugmentor, SparseFlowAugmentor
 
 
 class StereoDataset(data.Dataset):
-    def __init__(self, aug_params=None, sparse=False, reader=None):
+    def __init__(self, aug_params=None, sparse=False, reader=None, unsupervised=False):
         self.augmentor = None
         self.sparse = sparse
+        self.unsupervised = unsupervised
         self.img_pad = aug_params.pop("img_pad", None) if aug_params is not None else None
         if aug_params is not None and "crop_size" in aug_params:
             if sparse:
@@ -61,20 +62,26 @@ class StereoDataset(data.Dataset):
                 self.init_seed = True
 
         index = index % len(self.image_list)
-        disp = self.disparity_reader(self.disparity_list[index])
-        if isinstance(disp, tuple):
-            disp, valid = disp
-        else:
-            valid = disp < 512
-
+        
         img1 = frame_utils.read_gen(self.image_list[index][0])
         img2 = frame_utils.read_gen(self.image_list[index][1])
 
         img1 = np.array(img1).astype(np.uint8)
         img2 = np.array(img2).astype(np.uint8)
 
-        disp = np.array(disp).astype(np.float32)
-        flow = np.stack([-disp, np.zeros_like(disp)], axis=-1)
+        if self.unsupervised:
+            # No ground truth disparity needed for unsupervised
+            disp = np.zeros((img1.shape[0], img1.shape[1]), dtype=np.float32)
+            valid = np.ones((img1.shape[0], img1.shape[1]), dtype=bool)
+            flow = np.stack([-disp, np.zeros_like(disp)], axis=-1)
+        else:
+            disp = self.disparity_reader(self.disparity_list[index])
+            if isinstance(disp, tuple):
+                disp, valid = disp
+            else:
+                valid = disp < 512
+            disp = np.array(disp).astype(np.float32)
+            flow = np.stack([-disp, np.zeros_like(disp)], axis=-1)
 
         # grayscale images
         if len(img1.shape) == 2:

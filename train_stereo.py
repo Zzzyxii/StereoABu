@@ -47,8 +47,18 @@ def sequence_loss(flow_preds, flow_gt, valid, loss_gamma=0.9, max_flow=700):
     assert valid.shape == flow_gt.shape, [valid.shape, flow_gt.shape]
     assert not torch.isinf(flow_gt[valid.bool()]).any()
 
+    if valid.sum() == 0:
+        logging.warning("Skipping batch with no valid supervision pixels")
+        dummy_loss = torch.zeros([], device=flow_gt.device, requires_grad=True)
+        metrics = {k: 0.0 for k in ['epe', '1px', '3px', '5px']}
+        return dummy_loss, metrics
+
     for i in range(n_predictions):
-        assert not torch.isnan(flow_preds[i]).any() and not torch.isinf(flow_preds[i]).any()
+        if torch.isnan(flow_preds[i]).any() or torch.isinf(flow_preds[i]).any():
+            logging.warning(f"NaN/Inf detected in flow prediction {i}, returning dummy loss")
+            dummy_loss = torch.zeros([], device=flow_gt.device, requires_grad=True)
+            metrics = {k: 0.0 for k in ['epe', '1px', '3px', '5px']}
+            return dummy_loss, metrics
         # We adjust the loss_gamma so it is consistent for any number of RAFT-Stereo iterations
         adjusted_loss_gamma = loss_gamma**(15/(n_predictions - 1))
         i_weight = adjusted_loss_gamma**(n_predictions - i - 1)
@@ -167,6 +177,12 @@ def train(args):
             assert model.training
 
             loss, metrics = sequence_loss(flow_predictions, flow, valid)
+            
+            # Skip batch if loss is NaN/Inf
+            if torch.isnan(loss) or torch.isinf(loss) or loss.item() == 0.0:
+                logging.warning(f"Invalid loss detected at step {total_steps}, skipping batch")
+                continue
+            
             logger.writer.add_scalar("live_loss", loss.item(), global_batch_num)
             logger.writer.add_scalar(f'learning_rate', optimizer.param_groups[0]['lr'], global_batch_num)
             global_batch_num += 1

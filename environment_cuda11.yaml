@@ -35,7 +35,29 @@ dependencies:
   - tqdm
   - imageio
   - scikit-image
+  # - p7zip
   - pip:
       - opencv-python
       - opt_einsum
-      - p7zip
+
+
+# conda config --remove-key default_channels 2>/dev/null
+# conda config --append default_channels https://repo.anaconda.com/pkgs/main
+# conda config --append default_channels https://repo.anaconda.com/pkgs/r
+# conda config --append default_channels https://repo.anaconda.com/pkgs/msys2
+# conda config --append default_channels https://conda.anaconda.org/conda-forge
+# conda config --append default_channels https://conda.anaconda.org/pytorch
+# conda clean --all -y
+# cd /openbayes/home/RAFT-Stereo
+# CONDA_NO_PLUGINS=true conda env create --solver=classic -f environment_cuda11.yaml
+
+
+# conda config --remove-key default_channels 2>/dev/null
+# conda config --append default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+# conda config --append default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/r
+# conda config --append default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/msys2
+# conda config --append default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
+# conda config --append default_channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/pytorch
+# conda clean --all -y
+# cd /openbayes/home/RAFT-Stereo
+# CONDA_NO_PLUGINS=true conda env create --solver=classic -f environment_cuda11.yaml
