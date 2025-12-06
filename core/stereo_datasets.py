@@ -262,18 +262,18 @@ class TartanAir(StereoDataset):
             self.disparity_list += [ disp ]
 
 class KITTI(StereoDataset):
-    def __init__(self, aug_params=None, root='datasets/KITTI', image_set='training', year=2015):
+       def __init__(self, aug_params=None, root='datasets/KITTI', image_set='training', year=2015, use_noc=False):
         super(KITTI, self).__init__(aug_params, sparse=True, reader=frame_utils.readDispKITTI)
         assert os.path.exists(root)
 
         if year == 2012:
             image1_dir = 'image_0'
             image2_dir = 'image_1'
-            disp_dir = 'disp_refl_occ'
+            disp_dir = 'disp_noc' if use_noc else 'disp_refl_occ'
         elif year == 2015:
             image1_dir = 'image_2'
             image2_dir = 'image_3'
-            disp_dir = 'disp_occ_0'
+            disp_dir = 'disp_noc_0' if use_noc else 'disp_occ_0'
         else:
             raise ValueError(f"Unsupported KITTI year: {year}")
 
@@ -310,7 +310,7 @@ class Middlebury(StereoDataset):
 
 class VKITTI(StereoDataset):
     def __init__(self, aug_params=None, root='datasets/vKITTI2', image_set='training'):
-        super(VKITTI, self).__init__(aug_params, sparse=True, reader=frame_utils.readDispKITTI)
+        super(VKITTI, self).__init__(aug_params, sparse=True, reader=frame_utils.readDispVKITTI2)
         assert os.path.exists(root)
 
         # vKITTI2 has scenes like Scene01, Scene02, etc., with variants

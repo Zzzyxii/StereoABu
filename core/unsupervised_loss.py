@@ -34,11 +34,16 @@ def apply_disparity(img, disp):
     
     # Stack and reshape for grid_sample
     grid = torch.stack([grid_x, grid_y], dim=3)
+
+    # Validity mask to ignore samples that fall outside image bounds
+    valid_x = (grid_x >= -1.0) & (grid_x <= 1.0)
+    valid_y = (grid_y >= -1.0) & (grid_y <= 1.0)
+    mask = (valid_x & valid_y).float().unsqueeze(1)
     
     # Warp image
     warped = F.grid_sample(img, grid, mode='bilinear', padding_mode='zeros', align_corners=True)
     
-    return warped
+    return warped, mask
 
 
 def ssim(img1, img2, window_size=3):
@@ -68,41 +73,84 @@ def ssim(img1, img2, window_size=3):
     
     ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
     
-    return ssim_map.mean()
+    return ssim_map.mean(1, keepdim=True)
+
+
+def census_transform(img):
+    """
+    Compute Census transform (3x3 window)
+    """
+    B, C, H, W = img.shape
+    if C == 3:
+        img = img.mean(1, keepdim=True)
+    
+    patches = F.unfold(img, kernel_size=3, padding=1) # [B, 9, H*W]
+    patches = patches.view(B, 9, H, W)
+    
+    center = patches[:, 4:5, :, :]
+    census = (patches > center).float()
+    # Exclude center
+    return torch.cat([census[:, :4, :, :], census[:, 5:, :, :]], dim=1)
+
+
+def hamming_distance(c1, c2):
+    """
+    Compute Hamming distance between two census transforms
+    """
+    dist = torch.abs(c1 - c2).sum(dim=1, keepdim=True) / 8.0
+    return dist
 
 
 def photometric_loss(img_left, img_right, disp_left, disp_right=None, alpha=0.85):
     """
-    Photometric reconstruction loss using SSIM + L1
+    Photometric reconstruction loss using SSIM + Census (instead of L1)
     
     Args:
         img_left: [B, C, H, W] left image
         img_right: [B, C, H, W] right image  
         disp_left: [B, 1, H, W] disparity predicted from left image
         disp_right: [B, 1, H, W] disparity predicted from right image (optional)
-        alpha: weight for SSIM (1-alpha for L1)
+        alpha: weight for SSIM (1-alpha for Census)
     
     Returns:
         loss: photometric loss
     """
     # Warp right image to left using predicted disparity
-    img_right_warped = apply_disparity(img_right, -disp_left)
+    img_right_warped, valid_mask_left = apply_disparity(img_right, -disp_left)
+    mask_left = valid_mask_left
+    if disp_right is not None:
+        occlusion_mask_left = compute_occlusion_mask(disp_left, disp_right)
+        mask_left = mask_left * occlusion_mask_left
+    eps = 1e-6
     
     # SSIM loss
-    ssim_loss = 1 - ssim(img_left, img_right_warped)
+    ssim_map_left = ssim(img_left, img_right_warped)
     
-    # L1 loss
-    l1_loss = torch.abs(img_left - img_right_warped).mean()
+    # Census loss
+    census_left = census_transform(img_left)
+    census_right_warped = census_transform(img_right_warped)
+    census_map_left = hamming_distance(census_left, census_right_warped)
     
-    # Combined loss
-    photo_loss_left = alpha * ssim_loss + (1 - alpha) * l1_loss
+    ssim_loss_left = ((1 - ssim_map_left) * mask_left).sum() / (mask_left.sum() + eps)
+    census_loss_left = (census_map_left * mask_left).sum() / (mask_left.sum() + eps)
+    
+    photo_loss_left = alpha * ssim_loss_left + (1 - alpha) * census_loss_left
     
     if disp_right is not None:
         # Warp left image to right
-        img_left_warped = apply_disparity(img_left, disp_right)
-        ssim_loss_right = 1 - ssim(img_right, img_left_warped)
-        l1_loss_right = torch.abs(img_right - img_left_warped).mean()
-        photo_loss_right = alpha * ssim_loss_right + (1 - alpha) * l1_loss_right
+        img_left_warped, valid_mask_right = apply_disparity(img_left, disp_right)
+        mask_right = valid_mask_right * compute_occlusion_mask(disp_right, disp_left)
+        
+        ssim_map_right = ssim(img_right, img_left_warped)
+        
+        census_right = census_transform(img_right)
+        census_left_warped = census_transform(img_left_warped)
+        census_map_right = hamming_distance(census_right, census_left_warped)
+        
+        ssim_loss_right = ((1 - ssim_map_right) * mask_right).sum() / (mask_right.sum() + eps)
+        census_loss_right = (census_map_right * mask_right).sum() / (mask_right.sum() + eps)
+        
+        photo_loss_right = alpha * ssim_loss_right + (1 - alpha) * census_loss_right
         photo_loss = (photo_loss_left + photo_loss_right) / 2
     else:
         photo_loss = photo_loss_left
@@ -165,12 +213,12 @@ def lr_consistency_loss(disp_left, disp_right):
         loss: left-right consistency loss
     """
     # Warp right disparity to left view
-    disp_right_warped = apply_disparity(disp_right, -disp_left)
-    
-    # Consistency check: disp_left + disp_right_warped should be close to 0
-    lr_diff = torch.abs(disp_left + disp_right_warped)
-    
-    return lr_diff.mean()
+    disp_right_warped, valid_mask = apply_disparity(disp_right, -disp_left)
+    occlusion_mask = compute_occlusion_mask(disp_left, disp_right)
+    combined_mask = valid_mask * occlusion_mask
+    lr_diff = torch.abs(disp_left - disp_right_warped)
+    eps = 1e-6
+    return (lr_diff * combined_mask).sum() / (combined_mask.sum() + eps)
 
 
 def compute_occlusion_mask(disp_left, disp_right, threshold=1.0):
@@ -185,9 +233,9 @@ def compute_occlusion_mask(disp_left, disp_right, threshold=1.0):
     Returns:
         mask: [B, 1, H, W] binary mask (1 = non-occluded, 0 = occluded)
     """
-    disp_right_warped = apply_disparity(disp_right, -disp_left)
-    lr_diff = torch.abs(disp_left + disp_right_warped)
-    mask = (lr_diff < threshold).float()
+    disp_right_warped, valid_mask = apply_disparity(disp_right, -disp_left)
+    lr_diff = torch.abs(disp_left - disp_right_warped)
+    mask = (lr_diff < threshold).float() * valid_mask
     
     return mask
 
