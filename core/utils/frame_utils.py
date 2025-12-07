@@ -4,9 +4,9 @@ from os.path import *
 import re
 import json
 import imageio
-import cv2
-cv2.setNumThreads(0)
-cv2.ocl.setUseOpenCL(False)
+# import cv2
+# cv2.setNumThreads(0)
+# cv2.ocl.setUseOpenCL(False)
 
 TAG_CHAR = np.array([202021.25], np.float32)
 
@@ -115,20 +115,19 @@ def writeFlow(filename,uv,v=None):
 
 
 def readFlowKITTI(filename):
-    flow = cv2.imread(filename, cv2.IMREAD_ANYDEPTH|cv2.IMREAD_COLOR)
-    flow = flow[:,:,::-1].astype(np.float32)
+    flow = imageio.imread(filename).astype(np.float32)
     flow, valid = flow[:, :, :2], flow[:, :, 2]
     flow = (flow - 2**15) / 64.0
     return flow, valid
 
 def readDispKITTI(filename):
-    disp = cv2.imread(filename, cv2.IMREAD_ANYDEPTH) / 256.0
+    disp = imageio.imread(filename).astype(np.float32) / 256.0
     valid = disp > 0.0
     return disp, valid
 
 def readDispVKITTI2(file_name):
     # vKITTI2 depth is in cm, stored as uint16
-    depth = cv2.imread(file_name, cv2.IMREAD_ANYDEPTH).astype(np.float32)
+    depth = imageio.imread(file_name).astype(np.float32)
     
     # Intrinsics for vKITTI2
     f = 725.0087  # focal length in pixels
@@ -186,7 +185,7 @@ def writeFlowKITTI(filename, uv):
     uv = 64.0 * uv + 2**15
     valid = np.ones([uv.shape[0], uv.shape[1], 1])
     uv = np.concatenate([uv, valid], axis=-1).astype(np.uint16)
-    cv2.imwrite(filename, uv[..., ::-1])
+    imageio.imwrite(filename, uv)
     
 
 def read_gen(file_name, pil=False):

@@ -189,7 +189,7 @@ def demo_visualization():
     model_args = argparse.Namespace()
     model_args.corr_implementation = "reg"
     model_args.shared_backbone = False
-    model_args.corr_levels = 4
+    model_args.corr_levels = 6
     model_args.corr_radius = 4
     model_args.n_downsample = 2
     model_args.context_norm = "batch"

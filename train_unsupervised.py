@@ -308,7 +308,7 @@ if __name__ == '__main__':
     # Architecture choices
     parser.add_argument('--corr_implementation', choices=["reg", "alt", "reg_cuda", "alt_cuda"], default="reg")
     parser.add_argument('--shared_backbone', action='store_true')
-    parser.add_argument('--corr_levels', type=int, default=4)
+    parser.add_argument('--corr_levels', type=int, default=6)
     parser.add_argument('--corr_radius', type=int, default=4)
     parser.add_argument('--n_downsample', type=int, default=2)
     parser.add_argument('--context_norm', type=str, default="batch", choices=['group', 'batch', 'instance', 'none'])
@@ -324,9 +324,9 @@ if __name__ == '__main__':
     parser.add_argument('--noyjitter', action='store_true')
     
     # Dataset paths
-    parser.add_argument('--kitti2015_path', type=str, default='datasets/KITTI2015')
-    parser.add_argument('--kitti2012_path', type=str, default='datasets/KITTI2012')
-    parser.add_argument('--vkitti2_path', type=str, default='datasets/vKITTI2')
+    parser.add_argument('--kitti2015_path', type=str, default='/global_data/sft_intern/slz/zyx/CKPT/4bgrpocom50/KITTI2015')
+    parser.add_argument('--kitti2012_path', type=str, default='/global_data/sft_intern/slz/zyx/CKPT/4bgrpocom50/KITTI2012')
+    parser.add_argument('--vkitti2_path', type=str, default='/global_data/sft_intern/slz/zyx/CKPT/4bgrpocom50/vKITTI2')
 
     # Unsupervised loss weights
     parser.add_argument('--photo_weight', type=float, default=1.0, help="photometric损失权重")

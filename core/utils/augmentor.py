@@ -7,9 +7,9 @@ from glob import glob
 from skimage import color, io
 from PIL import Image
 
-import cv2
-cv2.setNumThreads(0)
-cv2.ocl.setUseOpenCL(False)
+# import cv2
+# cv2.setNumThreads(0)
+# cv2.ocl.setUseOpenCL(False)
 
 import torch
 from torchvision.transforms import ColorJitter, functional, Compose
@@ -129,9 +129,16 @@ class FlowAugmentor:
 
         if np.random.rand() < self.spatial_aug_prob:
             # rescale the images
-            img1 = cv2.resize(img1, None, fx=scale_x, fy=scale_y, interpolation=cv2.INTER_LINEAR)
-            img2 = cv2.resize(img2, None, fx=scale_x, fy=scale_y, interpolation=cv2.INTER_LINEAR)
-            flow = cv2.resize(flow, None, fx=scale_x, fy=scale_y, interpolation=cv2.INTER_LINEAR)
+            h, w = img1.shape[:2]
+            new_h, new_w = int(h * scale_y), int(w * scale_x)
+            
+            img1 = np.array(Image.fromarray(img1).resize((new_w, new_h), Image.BILINEAR))
+            img2 = np.array(Image.fromarray(img2).resize((new_w, new_h), Image.BILINEAR))
+            
+            flow_u = np.array(Image.fromarray(flow[:,:,0]).resize((new_w, new_h), Image.BILINEAR))
+            flow_v = np.array(Image.fromarray(flow[:,:,1]).resize((new_w, new_h), Image.BILINEAR))
+            flow = np.stack([flow_u, flow_v], axis=-1)
+            
             flow = flow * [scale_x, scale_y]
 
         if self.do_flip:
@@ -268,8 +275,12 @@ class SparseFlowAugmentor:
 
         if np.random.rand() < self.spatial_aug_prob:
             # rescale the images
-            img1 = cv2.resize(img1, None, fx=scale_x, fy=scale_y, interpolation=cv2.INTER_LINEAR)
-            img2 = cv2.resize(img2, None, fx=scale_x, fy=scale_y, interpolation=cv2.INTER_LINEAR)
+            h, w = img1.shape[:2]
+            new_h, new_w = int(h * scale_y), int(w * scale_x)
+            
+            img1 = np.array(Image.fromarray(img1).resize((new_w, new_h), Image.BILINEAR))
+            img2 = np.array(Image.fromarray(img2).resize((new_w, new_h), Image.BILINEAR))
+            
             flow, valid = self.resize_sparse_flow_map(flow, valid, fx=scale_x, fy=scale_y)
 
         if self.do_flip:

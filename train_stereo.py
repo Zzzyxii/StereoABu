@@ -264,7 +264,7 @@ if __name__ == '__main__':
     parser.add_argument('--noyjitter', action='store_true', help='don\'t simulate imperfect rectification')
     parser.add_argument('--kitti2015_path', type=str, default='datasets/KITTI2015', help='path to KITTI 2015 training data')
     parser.add_argument('--kitti2012_path', type=str, default='datasets/KITTI2012', help='path to KITTI 2012 training data')
-    parser.add_argument('--vkitti2_path', type=str, default='datasets/vKITTI2', help='path to vKITTI2 data root')
+    parser.add_argument('--vkitti2_path', type=str, default='/global_data/sft_intern/slz/zyx/CKPT/4bgrpocom50/vKITTI2', help='path to vKITTI2 data root')
     args = parser.parse_args()
 
     torch.manual_seed(1234)

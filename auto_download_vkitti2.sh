@@ -9,7 +9,7 @@
 
 set -e
 
-VKITTI2_DIR="/openbayes/home/RAFT-Stereo/datasets/vKITTI2"
+VKITTI2_DIR="/global_data/sft_intern/slz/zyx/CKPT/4bgrpocom50/vKITTI2"
 DOWNLOAD_DIR="${VKITTI2_DIR}/downloads"
 
 echo "========================================"
@@ -25,9 +25,9 @@ cd "${DOWNLOAD_DIR}"
 # After registration, you'll receive download links via email
 # Replace the URLs below with your actual links
 
-RGB_URL="YOUR_RGB_DOWNLOAD_LINK_HERE"
-DEPTH_URL="YOUR_DEPTH_DOWNLOAD_LINK_HERE"
-TEXTGT_URL="YOUR_TEXTGT_DOWNLOAD_LINK_HERE"
+RGB_URL="https://download.europe.naverlabs.com/virtual_kitti_2.0.3/vkitti_2.0.3_rgb.tar"
+DEPTH_URL="https://download.europe.naverlabs.com/virtual_kitti_2.0.3/vkitti_2.0.3_depth.tar"
+TEXTGT_URL="https://download.europe.naverlabs.com//virtual_kitti_2.0.3/vkitti_2.0.3_textgt.tar.gz"
 
 # ============================================
 # Alternative: Using aria2c (faster, supports resume)
@@ -38,47 +38,49 @@ TEXTGT_URL="YOUR_TEXTGT_DOWNLOAD_LINK_HERE"
 echo "Checking download tools..."
 if command -v aria2c &> /dev/null; then
     DOWNLOAD_CMD="aria2c -x 16 -s 16 -k 1M -c"
+    OUTPUT_FLAG="-o"
     echo "Using aria2c (multi-threaded download)"
 elif command -v wget &> /dev/null; then
     DOWNLOAD_CMD="wget -c"
+    OUTPUT_FLAG="-O"
     echo "Using wget"
 else
     echo "Error: Neither wget nor aria2c found. Please install one of them."
     exit 1
 fi
 
-# Download RGB images (~28 GB)
-if [ ! -f "vkitti_2.0.3_rgb.tar" ]; then
-    echo ""
-    echo "Downloading RGB images (28 GB)..."
-    if [ "${RGB_URL}" != "YOUR_RGB_DOWNLOAD_LINK_HERE" ]; then
-        ${DOWNLOAD_CMD} "${RGB_URL}" -O vkitti_2.0.3_rgb.tar
-    else
-        echo "⚠ RGB_URL not set. Please edit this script and add your download link."
-    fi
-else
-    echo "✓ RGB images already downloaded"
-fi
+# # Download RGB images (~28 GB)
+# if [ ! -f "vkitti_2.0.3_rgb.tar" ]; then
+#     echo ""
+#     echo "Downloading RGB images (28 GB)..."
+#     if [ "${RGB_URL}" != "YOUR_RGB_DOWNLOAD_LINK_HERE" ]; then
+#         ${DOWNLOAD_CMD} "${RGB_URL}" ${OUTPUT_FLAG} vkitti_2.0.3_rgb.tar
+#     else
+#         echo "⚠ RGB_URL not set. Please edit this script and add your download link."
+#     fi
+# else
+#     echo "✓ RGB images already downloaded"
+# fi
 
-# Download depth maps (~6.4 GB)
-if [ ! -f "vkitti_2.0.3_depth.tar" ]; then
-    echo ""
-    echo "Downloading depth maps (6.4 GB)..."
-    if [ "${DEPTH_URL}" != "YOUR_DEPTH_DOWNLOAD_LINK_HERE" ]; then
-        ${DOWNLOAD_CMD} "${DEPTH_URL}" -O vkitti_2.0.3_depth.tar
-    else
-        echo "⚠ DEPTH_URL not set. Please edit this script and add your download link."
-    fi
-else
-    echo "✓ Depth maps already downloaded"
-fi
+# # Download depth maps (~6.4 GB)
+# if [ ! -f "vkitti_2.0.3_depth.tar" ]; then
+#     echo ""
+#     echo "Downloading depth maps (6.4 GB)..."
+#     if [ "${DEPTH_URL}" != "YOUR_DEPTH_DOWNLOAD_LINK_HERE" ]; then
+#         ${DOWNLOAD_CMD} "${DEPTH_URL}" ${OUTPUT_FLAG} vkitti_2.0.3_depth.tar
+#     else
+#         echo "⚠ DEPTH_URL not set. Please edit this script and add your download link."
+#     fi
+# else
+#     echo "✓ Depth maps already downloaded"
+# fi
 
 # Download camera parameters (~44 MB)
 if [ ! -f "vkitti_2.0.3_textgt.tar" ]; then
     echo ""
     echo "Downloading camera parameters (44 MB)..."
     if [ "${TEXTGT_URL}" != "YOUR_TEXTGT_DOWNLOAD_LINK_HERE" ]; then
-        ${DOWNLOAD_CMD} "${TEXTGT_URL}" -O vkitti_2.0.3_textgt.tar
+        ${DOWNLOAD_CMD} "${TEXTGT_URL}" ${OUTPUT_FLAG} vkitti_2.0.3_textgt.tar
     else
         echo "⚠ TEXTGT_URL not set. Please edit this script and add your download link."
     fi

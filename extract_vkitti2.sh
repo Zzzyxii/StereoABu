@@ -3,7 +3,7 @@
 
 set -e
 
-VKITTI2_DIR="/openbayes/home/RAFT-Stereo/datasets/vKITTI2"
+VKITTI2_DIR="/global_data/sft_intern/slz/zyx/CKPT/4bgrpocom50/vKITTI2"
 DOWNLOAD_DIR="${VKITTI2_DIR}/downloads"
 EXTRACT_DIR="${VKITTI2_DIR}/raw"
 

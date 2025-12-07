@@ -4,7 +4,7 @@
 
 set -e
 
-VKITTI2_DIR="/openbayes/home/RAFT-Stereo/datasets/vKITTI2"
+VKITTI2_DIR="/m2/slz/zyx/sth/StereoABu/datasets/vKITTI2"
 DOWNLOAD_DIR="${VKITTI2_DIR}/downloads"
 
 echo "========================================"
