@@ -311,41 +311,18 @@ class Middlebury(StereoDataset):
 class VKITTI(StereoDataset):
     def __init__(self, aug_params=None, root='datasets/vKITTI2', image_set='training'):
         super(VKITTI, self).__init__(aug_params, sparse=True, reader=frame_utils.readDispVKITTI2)
-        assert os.path.exists(root)
+        
+        image1_list = sorted(glob(osp.join(root, 'Scene*/*/frames/rgb/Camera_0/rgb_*.jpg')))
+        image2_list = sorted(glob(osp.join(root, 'Scene*/*/frames/rgb/Camera_1/rgb_*.jpg')))
+        disp_list = sorted(glob(osp.join(root, 'Scene*/*/frames/depth/Camera_0/depth_*.png')))
 
-        # vKITTI2 has scenes like Scene01, Scene02, etc., with variants
-        # For simplicity, assume training set with disparity
-        image1_list = []
-        image2_list = []
-        disp_list = []
-
-        root_path = Path(root)
-        if (root_path / 'raw').exists():
-            root_path = root_path / 'raw'
-
-        for scene in sorted(root_path.glob('Scene*')):
-            if not scene.is_dir():
-                continue
-
-            for variant in sorted(scene.glob('*')):
-                if not variant.is_dir():
-                    continue
-
-                left_dir = variant / 'frames' / 'rgb' / 'Camera_0'
-                right_dir = variant / 'frames' / 'rgb' / 'Camera_1'
-                disp_dir = variant / 'frames' / 'depth' / 'Camera_0'
-
-                if not (left_dir.exists() and right_dir.exists() and disp_dir.exists()):
-                    continue
-
-                left_images = sorted(list(left_dir.glob('*.png')) + list(left_dir.glob('*.jpg')))
-                right_images = sorted(list(right_dir.glob('*.png')) + list(right_dir.glob('*.jpg')))
-                disp_images = sorted(disp_dir.glob('*.png'))
-
-                for img1, img2, disp in zip(left_images, right_images, disp_images):
-                    image1_list.append(str(img1))
-                    image2_list.append(str(img2))
-                    disp_list.append(str(disp))
+        if not image1_list:
+             # Fallback to checking if 'raw' subdirectory exists (as in original code)
+             if (Path(root) / 'raw').exists():
+                 root = str(Path(root) / 'raw')
+                 image1_list = sorted(glob(osp.join(root, 'Scene*/*/frames/rgb/Camera_0/rgb_*.jpg')))
+                 image2_list = sorted(glob(osp.join(root, 'Scene*/*/frames/rgb/Camera_1/rgb_*.jpg')))
+                 disp_list = sorted(glob(osp.join(root, 'Scene*/*/frames/depth/Camera_0/depth_*.png')))
 
         for img1, img2, disp in zip(image1_list, image2_list, disp_list):
             self.image_list += [ [img1, img2] ]

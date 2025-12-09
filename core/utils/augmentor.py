@@ -270,6 +270,50 @@ class SparseFlowAugmentor:
             (self.crop_size[1] + 1) / float(wd))
 
         scale = 2 ** np.random.uniform(self.min_scale, self.max_scale)
+        if scale > min_scale:
+            scale = np.random.uniform(min_scale, 2*min_scale)
+        scale_x = scale
+        scale_y = scale
+        
+        scale_x = np.clip(scale_x, min_scale, 2*min_scale)
+        scale_y = np.clip(scale_y, min_scale, 2*min_scale)
+
+        if np.random.rand() < self.spatial_aug_prob or min_scale >= 1.0:
+            # rescale the images
+            h, w = img1.shape[:2]
+            new_h, new_w = int(h * scale_y), int(w * scale_x)
+            
+            img1 = np.array(Image.fromarray(img1).resize((new_w, new_h), Image.BILINEAR))
+            img2 = np.array(Image.fromarray(img2).resize((new_w, new_h), Image.BILINEAR))
+            
+            flow, valid = self.resize_sparse_flow_map(flow, valid, fx=scale_x, fy=scale_y)
+
+        if self.do_flip:
+            if np.random.rand() < self.v_flip_prob and self.do_flip == 'v': # v-flip
+                img1 = img1[::-1, :]
+                img2 = img2[::-1, :]
+                flow = flow[::-1, :] * [1.0, -1.0]
+                valid = valid[::-1, :]
+
+        y0 = np.random.randint(0, img1.shape[0] - self.crop_size[0])
+        x0 = np.random.randint(0, img1.shape[1] - self.crop_size[1])
+        
+        img1 = img1[y0:y0+self.crop_size[0], x0:x0+self.crop_size[1]]
+        img2 = img2[y0:y0+self.crop_size[0], x0:x0+self.crop_size[1]]
+        flow = flow[y0:y0+self.crop_size[0], x0:x0+self.crop_size[1]]
+        valid = valid[y0:y0+self.crop_size[0], x0:x0+self.crop_size[1]]
+
+        return img1, img2, flow, valid
+
+    def spatial_transform(self, img1, img2, flow, valid):
+        # randomly sample scale
+
+        ht, wd = img1.shape[:2]
+        min_scale = np.maximum(
+            (self.crop_size[0] + 1) / float(ht), 
+            (self.crop_size[1] + 1) / float(wd))
+
+        scale = 2 ** np.random.uniform(self.min_scale, self.max_scale)
         scale_x = np.clip(scale, min_scale, None)
         scale_y = np.clip(scale, min_scale, None)
 

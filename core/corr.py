@@ -137,7 +137,7 @@ class CorrBlock1D:
             x0 = dx + coords.reshape(batch*h1*w1, 1, 1, 1) / 2**i
             y0 = torch.zeros_like(x0)
 
-            coords_lvl = torch.cat([x0,y0], dim=-1)
+            coords_lvl = torch.cat([x0,y0], dim=-1).contiguous()
             corr = bilinear_sampler(corr, coords_lvl)
             corr = corr.view(batch, h1, w1, -1)
             out_pyramid.append(corr)

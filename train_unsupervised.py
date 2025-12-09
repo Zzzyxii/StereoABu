@@ -145,7 +145,7 @@ def train(args):
         batch_size=args.batch_size,
         pin_memory=True, 
         shuffle=True, 
-        num_workers=16,
+        num_workers=32,
         drop_last=True
     )
 
@@ -157,7 +157,21 @@ def train(args):
         assert args.restore_ckpt.endswith(".pth")
         logging.info("Loading checkpoint...")
         checkpoint = torch.load(args.restore_ckpt)
-        model.load_state_dict(checkpoint, strict=True)
+        
+        if isinstance(checkpoint, dict) and 'model' in checkpoint:
+            model.load_state_dict(checkpoint['model'], strict=True)
+            if 'optimizer' in checkpoint:
+                optimizer.load_state_dict(checkpoint['optimizer'])
+            if 'scheduler' in checkpoint:
+                scheduler.load_state_dict(checkpoint['scheduler'])
+            if 'total_steps' in checkpoint:
+                total_steps = checkpoint['total_steps']
+            
+            logging.info(f"Resuming from step {total_steps}")
+        else:
+            model.load_state_dict(checkpoint, strict=True)
+            logging.info(f"Loaded weights only (no optimizer state found)")
+            
         logging.info(f"Done loading checkpoint")
 
     model.cuda()
@@ -175,7 +189,7 @@ def train(args):
     }
 
     should_keep_training = True
-    global_batch_num = 0
+    global_batch_num = total_steps // args.accumulate_steps
     accumulated_batches = 0  # 新增：用于梯度累积的计数器
     accumulated_loss = 0.0   # 新增：累积的损失值（用于日志）
     
@@ -198,28 +212,21 @@ def train(args):
             total_loss = 0
             n_predictions = len(flow_predictions_left)
             
-            # Iterate over all predictions (Sequence Loss)
-            for i in range(n_predictions):
-                # Exponential weight: 0.8^(N - 1 - i)
-                i_weight = 0.8 ** (n_predictions - i - 1)
-                
-                # Get predictions for this iteration
-                disp_left = -flow_predictions_left[i][:, 0:1, :, :]
-                disp_right = flow_predictions_right[i][:, 0:1, :, :]
+            # Prepare predictions for unsupervised loss (expecting positive disparity)
+            # Left flow is negative, so negate it. Right flow is positive.
+            preds_L_pos = [-f for f in flow_predictions_left]
+            preds_R_pos = [f for f in flow_predictions_right]
 
-                # Compute unsupervised loss for this iteration
-                i_loss, i_loss_dict = unsupervised_loss(
-                    disp_left, disp_right, img1_norm, img2_norm,
-                    loss_weights=loss_weights,
-                    smooth_order=args.smooth_order
-                )
-                
-                total_loss += i_weight * i_loss
-                
-                # Keep the loss_dict from the final iteration for logging
-                if i == n_predictions - 1:
-                    batch_loss = total_loss
-                    loss_dict = i_loss_dict
+            # Compute unsupervised loss (multi-scale, multi-step handled internally)
+            batch_loss, loss_dict = unsupervised_loss(
+                img1_norm, img2_norm,
+                preds_L_pos, preds_R_pos,
+                w_photo=args.photo_weight,
+                w_smooth=args.smooth_weight,
+                w_lr=args.lr_weight,
+                gamma=0.8,
+                num_scales=args.loss_scales
+            )
 
             # Check for NaN
             if torch.isnan(batch_loss) or torch.isinf(batch_loss):
@@ -256,6 +263,7 @@ def train(args):
                     logger.writer.add_scalar(f'loss/{k}', v, global_batch_num)
                 
                 # 推送日志
+                loss_dict['total'] = avg_loss
                 logger.push(loss_dict)
                 
                 # 重置累积
@@ -270,7 +278,12 @@ def train(args):
                     save_path = Path(f'checkpoints_unsup/{args.stage}') / f'{total_steps + 1}_{args.name}.pth'
                     save_path.parent.mkdir(exist_ok=True, parents=True)
                     logging.info(f"Saving file {save_path.absolute()}")
-                    torch.save(model.state_dict(), save_path)
+                    torch.save({
+                        'model': model.state_dict(),
+                        'optimizer': optimizer.state_dict(),
+                        'scheduler': scheduler.state_dict(),
+                        'total_steps': total_steps + 1
+                    }, save_path)
                 
                 total_steps += 1
 
@@ -283,7 +296,12 @@ def train(args):
     
     save_path = Path(f'checkpoints_unsup/{args.stage}') / f'{args.name}_final.pth'
     save_path.parent.mkdir(exist_ok=True, parents=True)
-    torch.save(model.state_dict(), save_path)
+    torch.save({
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'scheduler': scheduler.state_dict(),
+        'total_steps': total_steps
+    }, save_path)
 
     return save_path
 
@@ -330,9 +348,10 @@ if __name__ == '__main__':
 
     # Unsupervised loss weights
     parser.add_argument('--photo_weight', type=float, default=1.0, help="photometric损失权重")
-    parser.add_argument('--smooth_weight', type=float, default=0.05, help="平滑损失权重")
+    parser.add_argument('--smooth_weight', type=float, default=0.01, help="平滑损失权重")
     parser.add_argument('--lr_weight', type=float, default=0.1, help="左右一致性损失权重")
     parser.add_argument('--smooth_order', type=int, default=1, choices=[1, 2], help="平滑阶数")
+    parser.add_argument('--loss_scales', type=int, default=3, help="number of scales for unsupervised loss")
 
     args = parser.parse_args()
 
@@ -625,7 +644,7 @@ if __name__ == '__main__':
 #     parser.add_argument('--wdecay', type=float, default=.00001, help="weight decay")
 #     parser.add_argument('--val_freq', type=int, default=5000, help="validation/checkpoint frequency")
 
-#     # Architecture choices
+    # Architecture choices
 #     parser.add_argument('--corr_implementation', choices=["reg", "alt", "reg_cuda", "alt_cuda"], default="reg")
 #     parser.add_argument('--shared_backbone', action='store_true')
 #     parser.add_argument('--corr_levels', type=int, default=4)
@@ -648,11 +667,12 @@ if __name__ == '__main__':
 #     parser.add_argument('--kitti2012_path', type=str, default='datasets/KITTI2012')
 #     parser.add_argument('--vkitti2_path', type=str, default='datasets/vKITTI2')
 
-#     # Unsupervised loss weights
-#     parser.add_argument('--photo_weight', type=float, default=1.0, help="photometric loss weight")
-#     parser.add_argument('--smooth_weight', type=float, default=0.05, help="smoothness loss weight")
-#     parser.add_argument('--lr_weight', type=float, default=0.1, help="left-right consistency loss weight")
-#     parser.add_argument('--smooth_order', type=int, default=1, choices=[1, 2], help="smoothness order")
+    # Unsupervised loss weights
+# parser.add_argument('--photo_weight', type=float, default=1.0, help="photometric loss weight")
+# parser.add_argument('--smooth_weight', type=float, default=0.01, help="smoothness loss weight")
+# parser.add_argument('--lr_weight', type=float, default=0.1, help="left-right consistency loss weight")
+# parser.add_argument('--smooth_order', type=int, default=1, choices=[1, 2], help="smoothness order")
+# parser.add_argument('--loss_scales', type=int, default=3, help="number of scales for unsupervised loss")
 
 #     args = parser.parse_args()
 

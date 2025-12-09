@@ -125,20 +125,14 @@ def readDispKITTI(filename):
     valid = disp > 0.0
     return disp, valid
 
-def readDispVKITTI2(file_name):
+def readDispVKITTI2(filename):
     # vKITTI2 depth is in cm, stored as uint16
-    depth = imageio.imread(file_name).astype(np.float32)
-    
-    # Intrinsics for vKITTI2
-    f = 725.0087  # focal length in pixels
-    b = 53.27     # baseline in cm (0.5327m)
-    
-    # Avoid division by zero
-    mask = (depth > 0)
-    disp = np.zeros_like(depth)
-    disp[mask] = (f * b) / depth[mask]
-    
-    return disp, mask
+    depth = imageio.imread(filename).astype(np.float32) / 100.0
+    valid = depth > 0.0
+    baseline = 0.532725
+    focus_length = 725.0087
+    disp = baseline*focus_length/(depth+1e-8)
+    return disp, valid
 
 # Method taken from /n/fs/raft-depth/RAFT-Stereo/datasets/SintelStereo/sdk/python/sintel_io.py
 def readDispSintelStereo(file_name):

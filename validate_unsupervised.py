@@ -16,6 +16,7 @@ from core.raft_stereo import RAFTStereo
 from core.dataset_split import sample_vkitti2, split_dataset
 import core.stereo_datasets as datasets
 from core.utils.utils import InputPadder
+from core.utils.flow_viz import flow_to_image
 
 
 @torch.no_grad()
@@ -81,27 +82,46 @@ def compute_metrics(
                 err_np = np.abs(disp_pred_np - disp_gt_np)
 
                 err_np = np.where(mask_np, err_np, np.nan)
-                disp_pred_masked = np.where(mask_np, disp_pred_np, np.nan)
-                disp_gt_masked = np.where(mask_np, disp_gt_np, np.nan)
-
-                vmax = np.nanpercentile(disp_gt_masked, 99)
+                
+                # Calculate robust max disparity for normalization
+                valid_gt = disp_gt_np[mask_np]
+                if len(valid_gt) > 0:
+                    vmax = np.percentile(valid_gt, 99)
+                else:
+                    vmax = 1.0
                 vmax = max(vmax, 1.0)
+
+                # Prepare for visualization
+                # Use 'jet' colormap for disparity to match error heatmap
+                cmap_disp = plt.get_cmap("jet").copy()
+                cmap_disp.set_bad(color='black')
+
+                # Mask invalid regions for visualization
+                disp_pred_viz = np.where(mask_np, disp_pred_np, np.nan)
+                disp_gt_viz = np.where(mask_np, disp_gt_np, np.nan)
+
                 err_max = np.nanpercentile(err_np, 99)
                 err_max = max(err_max, 1.0)
 
-                fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+                # Adjust figsize to reduce whitespace for wide stereo images
+                # Stereo images are typically wide (e.g. 3:1 aspect ratio)
+                # 3 subplots side-by-side requires a very wide figure
+                fig, axes = plt.subplots(3, 1, figsize=(10, 12))
+                
                 axes[0].set_title("Predicted disparity")
-                im0 = axes[0].imshow(disp_pred_masked, cmap="plasma", vmin=0, vmax=vmax)
-                fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
+                im0 = axes[0].imshow(disp_pred_viz, cmap=cmap_disp, vmin=0, vmax=vmax)
                 axes[0].axis("off")
+                # Add colorbar for disparity
+                fig.colorbar(im0, ax=axes[0], fraction=0.046, pad=0.04)
 
                 axes[1].set_title("GT disparity")
-                im1 = axes[1].imshow(disp_gt_masked, cmap="plasma", vmin=0, vmax=vmax)
-                fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
+                im1 = axes[1].imshow(disp_gt_viz, cmap=cmap_disp, vmin=0, vmax=vmax)
                 axes[1].axis("off")
+                fig.colorbar(im1, ax=axes[1], fraction=0.046, pad=0.04)
 
-                axes[2].set_title("Error heatmap")
-                im2 = axes[2].imshow(err_np, cmap="inferno", vmin=0, vmax=err_max)
+                axes[2].set_title(f"Error heatmap (Max: {err_max:.1f})")
+                
+                im2 = axes[2].imshow(err_np, cmap=cmap_disp, vmin=0, vmax=err_max)
                 fig.colorbar(im2, ax=axes[2], fraction=0.046, pad=0.04)
                 axes[2].axis("off")
 
@@ -209,6 +229,12 @@ def main() -> None:
 
     logging.info("Loading checkpoint %s", ckpt_path)
     state_dict = torch.load(ckpt_path, map_location=device)
+    
+    # Handle new checkpoint format (dict with 'model', 'optimizer', etc.)
+    if isinstance(state_dict, dict) and 'model' in state_dict:
+        logging.info("Detected new checkpoint format, extracting model weights...")
+        state_dict = state_dict['model']
+        
     model.load_state_dict(state_dict, strict=True)
 
     val_loader = build_val_loader(args)
